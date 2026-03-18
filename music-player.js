@@ -127,9 +127,15 @@ class GuildPlayer extends EventEmitter {
 
       // 2️⃣ FALLBACK TO SOUNDCLOUD IF YOUTUBE IS BLOCKED (e.g. rate limits)
       if (!stream) {
-        const scResults = await play.search(`${track.title} ${track.artist}`, {
+        let scResults = await play.search(`${track.title} ${track.artist}`, {
           source: { soundcloud: 'tracks' }, limit: 5
         });
+
+        if (!scResults || scResults.length === 0) {
+          scResults = await play.search(`${track.title}`, {
+            source: { soundcloud: 'tracks' }, limit: 5
+          });
+        }
 
         if (scResults && scResults.length > 0) {
           // Filter to avoid bad versions unless specifically requested
