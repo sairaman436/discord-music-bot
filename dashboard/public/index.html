@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Zupp Music — Production Dashboard</title>
+  <meta name="description" content="Premium industrial-grade Discord music bot dashboard." />
+  <link rel="stylesheet" href="/assets/index.css" />
+</head>
+
+<body>
+
+  <!-- ═══ BACKGROUND ═══════════════════════════════════════════════ -->
+  <canvas id="particles"></canvas>
+  <div class="bg-layer">
+    <div class="bg-orb bg-orb-1"></div>
+    <div class="bg-orb bg-orb-2"></div>
+    <div class="bg-orb bg-orb-3"></div>
+    <div class="bg-grid"></div>
+    <div class="bg-scan"></div>
+    <div class="bg-noise"></div>
+  </div>
+
+  <div class="dash-wrap">
+
+    <!-- ═══ SIDEBAR ════════════════════════════════════════════════ -->
+    <aside class="sidebar" id="sidebar">
+      <a href="/" class="sb-brand">
+        <span class="sb-brand-icon">🎵</span>
+        <span class="sb-brand-name" id="brand-name">ZUPP</span>
+      </a>
+
+      <span class="sb-label">Dashboard</span>
+      <ul class="sb-nav">
+        <li><a href="#overview" class="active"><span class="nav-icon">📊</span> Overview</a></li>
+        <li><a href="#np-section"><span class="nav-icon">🎶</span> Now Playing</a></li>
+        <li><a href="#controls"><span class="nav-icon">🎛️</span> Controls</a></li>
+        <li><a href="#commands"><span class="nav-icon">⚡</span> Commands</a></li>
+        <li><a href="#logs"><span class="nav-icon">📋</span> Prod. Log</a></li>
+      </ul>
+
+      <span class="sb-label">Quick Actions</span>
+      <ul class="sb-nav">
+        <li><a href="/invite"><span class="nav-icon">🚀</span> Add to Server</a></li>
+        <li><a href="#"><span class="nav-icon">📖</span> Documentation</a></li>
+      </ul>
+
+      <div class="sb-foot">
+        <div class="sb-status">
+          <span class="dot" id="sb-dot"></span>
+          <span id="sb-status-text">Connecting...</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ═══ MAIN ═══════════════════════════════════════════════════ -->
+    <main class="main">
+      <header class="hdr">
+        <div class="hdr-left">
+          <button class="hamburger" id="ham-btn" aria-label="Menu">☰</button>
+          <div>
+            <div class="hdr-title">PRODUCTION DASHBOARD</div>
+            <div class="hdr-path">sys://<b>zupp</b>/dashboard/live</div>
+          </div>
+        </div>
+        <div class="hdr-right">
+          <div class="hdr-clock" id="clock">--:--:--</div>
+        </div>
+      </header>
+
+      <div class="content">
+
+        <!-- ═══ WELCOME BANNER ═════════════════════════════════════ -->
+        <div class="welcome anim d1">
+          <h1>Welcome to <span>Zupp Control Center</span></h1>
+          <p class="typewriter">All systems operational · Streaming audio across Discord</p>
+        </div>
+
+        <!-- ═══ STATS ══════════════════════════════════════════════ -->
+        <section id="overview">
+          <div class="stats-row">
+            <div class="s-card glass glow-border anim d1">
+              <div class="s-icon">🏭</div>
+              <div class="s-val" id="s-servers">—</div>
+              <div class="s-lbl">Active Servers</div>
+              <div class="s-badge live">● ONLINE</div>
+            </div>
+            <div class="s-card glass glow-border anim d2">
+              <div class="s-icon">🔊</div>
+              <div class="s-val" id="s-playing">0</div>
+              <div class="s-lbl">Now Playing</div>
+              <div class="s-badge live">● STREAMING</div>
+            </div>
+            <div class="s-card glass glow-border anim d3">
+              <div class="s-icon">⚡</div>
+              <div class="s-val">11</div>
+              <div class="s-lbl">Slash Commands</div>
+              <div class="s-badge live">✓ DEPLOYED</div>
+            </div>
+            <div class="s-card glass glow-border anim d4">
+              <div class="s-icon">⏱️</div>
+              <div class="s-val" id="s-uptime">0:00</div>
+              <div class="s-lbl">Session Uptime</div>
+              <div class="s-badge live">● RUNNING</div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ═══ NOW PLAYING ════════════════════════════════════════ -->
+        <section id="np-section">
+          <div class="now-playing anim d5">
+            <div class="np-flex">
+              <div class="np-art" id="np-art">🎧</div>
+              <div class="np-info">
+                <div class="np-label">NOW PLAYING</div>
+                <div class="np-title" id="np-title">Waiting for track...</div>
+                <div class="np-artist" id="np-artist">Start playing music in Discord</div>
+                <div class="np-times">
+                  <span id="np-elapsed">0:00</span>
+                  <span id="np-total">0:00</span>
+                </div>
+                <div class="np-bar">
+                  <div class="np-bar-fill" id="np-fill"></div>
+                </div>
+              </div>
+              <div class="np-wave">
+                <span></span><span></span><span></span><span></span>
+                <span></span><span></span><span></span><span></span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ═══ CONTROLS ═══════════════════════════════════════════ -->
+        <section id="controls">
+          <div class="panels">
+            <div class="panel clay anim d1">
+              <div class="panel-hd"><span class="hd-icon">🎛️</span> Playback Controls</div>
+              <div class="btn-row">
+                <button class="c-btn accent" onclick="act('play')">▶ Play</button>
+                <button class="c-btn" onclick="act('pause')">⏸ Pause</button>
+                <button class="c-btn" onclick="act('skip')">⏭ Skip</button>
+                <button class="c-btn danger" onclick="act('stop')">⏹ Stop</button>
+                <button class="c-btn" onclick="act('shuffle')">🔀 Shuffle</button>
+                <button class="c-btn" onclick="act('loop')">🔁 Loop</button>
+              </div>
+              <div class="slider-wrap">
+                <div class="slider-label">Volume <b id="vol-val">80%</b></div>
+                <input type="range" class="c-slider" min="0" max="100" value="80" id="vol-slider"
+                  oninput="document.getElementById('vol-val').textContent=this.value+'%'">
+              </div>
+            </div>
+
+            <div class="panel clay anim d2">
+              <div class="panel-hd"><span class="hd-icon">⚙️</span> System Diagnostics</div>
+              <div class="sys-row"><span class="sys-k">Bot Gateway</span><span class="sys-v up" id="d-bot">●
+                  Online</span></div>
+              <div class="sys-row"><span class="sys-k">Lavalink Node</span><span class="sys-v up" id="d-lava">●
+                  Connected</span></div>
+              <div class="sys-row"><span class="sys-k">Dashboard API</span><span class="sys-v up">● Active</span></div>
+              <div class="sys-row"><span class="sys-k">Gateway Ping</span><span class="sys-v info" id="d-ping">—
+                  ms</span></div>
+              <div class="sys-row"><span class="sys-k">Heap Usage</span><span class="sys-v info" id="d-mem">— MB</span>
+              </div>
+              <div class="sys-row"><span class="sys-k">Node Runtime</span><span class="sys-v"
+                  style="color:var(--text-2)">v20.18.0</span></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ═══ COMMANDS ═══════════════════════════════════════════ -->
+        <section id="commands">
+          <div class="cmd-panel glass anim d3">
+            <div class="panel-hd"><span class="hd-icon">⚡</span> Command Registry</div>
+            <table class="cmd-tbl">
+              <thead>
+                <tr>
+                  <th>Command</th>
+                  <th>Description</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="cn">/play</td>
+                  <td class="cd">Search or paste a YouTube / Spotify URL</td>
+                  <td class="cs">● ACTIVE</td>
+                </tr>
+                <tr>
+                  <td class="cn">/skip</td>
+                  <td class="cd">Skip to the next song in queue</td>
+                  <td class="cs">● ACTIVE</td>
+                </tr>
+                <tr>
+                  <td class="cn">/stop</td>
+                  <td class="cd">Stop playback & clear queue</td>
+                  <td class="cs">● ACTIVE</td>
+                </tr>
+                <tr>
+                  <td class="cn">/pause</td>
+                  <td class="cd">Pause the current track</td>
+                  <td class="cs">● ACTIVE</td>
+                </tr>
+                <tr>
+                  <td class="cn">/resume</td>
+                  <td class="cd">Resume paused playback</td>
+                  <td class="cs">● ACTIVE</td>
+                </tr>
+                <tr>
+                  <td class="cn">/queue</td>
+                  <td class="cd">View the full song queue</td>
+                  <td class="cs">● ACTIVE</td>
+                </tr>
+                <tr>
+                  <td class="cn">/np</td>
+                  <td class="cd">Show now-playing info</td>
+                  <td class="cs">● ACTIVE</td>
+                </tr>
+                <tr>
+                  <td class="cn">/volume</td>
+                  <td class="cd">Set volume 1–100%</td>
+                  <td class="cs">● ACTIVE</td>
+                </tr>
+                <tr>
+                  <td class="cn">/shuffle</td>
+                  <td class="cd">Shuffle the queue</td>
+                  <td class="cs">● ACTIVE</td>
+                </tr>
+                <tr>
+                  <td class="cn">/loop</td>
+                  <td class="cd">Toggle loop on current song</td>
+                  <td class="cs">● ACTIVE</td>
+                </tr>
+                <tr>
+                  <td class="cn">/lyrics</td>
+                  <td class="cd">Fetch lyrics from Genius</td>
+                  <td class="cs">● ACTIVE</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- ═══ LOG ═════════════════════════════════════════════════ -->
+        <section id="logs">
+          <div class="log-box glass anim d4">
+            <div class="log-top">
+              <div class="log-top-title">📋 Production Log <span class="cursor-blink"></span></div>
+              <div class="log-dots"><i class="dr"></i><i class="dy"></i><i class="dg"></i></div>
+            </div>
+            <div class="log-stream" id="log-stream"></div>
+          </div>
+        </section>
+
+        <!-- ═══ INVITE ═════════════════════════════════════════════ -->
+        <div class="invite-box anim d5">
+          <h2>Ready to <span>Deploy</span>?</h2>
+          <p>Add Zupp to your server in one click · Zero config · Free forever</p>
+          <a href="/invite" class="c-btn accent" style="padding:16px 48px;font-size:1rem">
+            🚀 Add to Your Server
+          </a>
+        </div>
+
+      </div>
+
+      <footer class="dash-foot">
+        <span>© 2025 Zupp Music Bot · Manufactured with 💜</span>
+        <span class="foot-ver">V3.0.0 · INDUSTRIAL</span>
+      </footer>
+    </main>
+  </div>
+
+  <script>
+    /* ═══ PARTICLE SYSTEM ═════════════════════════════════════════ */
+    const cvs = document.getElementById('particles'), ctx = cvs.getContext('2d');
+    let W, H;
+    function resize() { W = cvs.width = innerWidth; H = cvs.height = innerHeight }
+    resize(); addEventListener('resize', resize);
+
+    const particles = [];
+    for (let i = 0; i < 60; i++) {
+      particles.push({
+        x: Math.random() * innerWidth, y: Math.random() * innerHeight,
+        r: Math.random() * 2 + .5,
+        dx: (Math.random() - .5) * .3, dy: (Math.random() - .5) * .3,
+        o: Math.random() * .4 + .1
+      });
+    }
+    function drawParticles() {
+      ctx.clearRect(0, 0, W, H);
+      particles.forEach(p => {
+        p.x += p.dx; p.y += p.dy;
+        if (p.x < 0) p.x = W; if (p.x > W) p.x = 0;
+        if (p.y < 0) p.y = H; if (p.y > H) p.y = 0;
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(0,229,255,${p.o})`; ctx.fill();
+      });
+      // Draw connections
+      for (let i = 0; i < particles.length; i++) {
+        for (let j = i + 1; j < particles.length; j++) {
+          const dx = particles[i].x - particles[j].x, dy = particles[i].y - particles[j].y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < 120) {
+            ctx.beginPath(); ctx.moveTo(particles[i].x, particles[i].y);
+            ctx.lineTo(particles[j].x, particles[j].y);
+            ctx.strokeStyle = `rgba(0,229,255,${.08 * (1 - dist / 120)})`;
+            ctx.lineWidth = .5; ctx.stroke();
+          }
+        }
+      }
+      requestAnimationFrame(drawParticles);
+    }
+    drawParticles();
+
+    /* ═══ CLOCK ═══════════════════════════════════════════════════ */
+    const $ = id => document.getElementById(id);
+    function tick() {
+      const d = new Date(), p = n => String(n).padStart(2, '0');
+      $('clock').textContent = `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+    }
+    setInterval(tick, 1000); tick();
+
+    /* ═══ SIDEBAR TOGGLE ══════════════════════════════════════════ */
+    $('ham-btn')?.addEventListener('click', () => $('sidebar').classList.toggle('open'));
+    document.querySelectorAll('.sb-nav a').forEach(a => a.addEventListener('click', () => { if (innerWidth <= 768) $('sidebar').classList.remove('open') }));
+
+    /* ═══ ANIMATED NUMBER COUNTER ═════════════════════════════════ */
+    function countUp(el, target, duration = 1200) {
+      const start = performance.now(); const from = parseInt(el.textContent) || 0;
+      (function frame(now) {
+        const t = Math.min((now - start) / duration, 1);
+        const ease = 1 - Math.pow(1 - t, 3);
+        el.textContent = Math.round(from + (target - from) * ease);
+        if (t < 1) requestAnimationFrame(frame);
+      })(start);
+    }
+
+    /* ═══ FETCH STATS ═════════════════════════════════════════════ */
+    const boot = Date.now();
+    async function sync() {
+      try {
+        const r = await fetch('/api/info'), d = await r.json();
+        const servers = parseInt(d.servers) || 0;
+        const playing = parseInt(d.playing) || 0;
+        countUp($('s-servers'), servers);
+        countUp($('s-playing'), playing);
+        if (d.name && d.name !== 'Music Bot') {
+          $('brand-name').textContent = d.name.toUpperCase();
+        }
+        const on = d.status === 'online';
+        $('sb-dot').style.background = on ? 'var(--green)' : 'var(--amber)';
+        $('sb-dot').style.boxShadow = on ? '0 0 10px var(--green),0 0 20px rgba(16,185,129,0.3)' : '0 0 10px var(--amber)';
+        $('sb-status-text').textContent = on ? 'All Systems Online' : 'Initializing...';
+        $('d-bot').innerHTML = on ? '<span style="color:var(--green);text-shadow:0 0 8px rgba(16,185,129,0.3)">● Online</span>' : '<span style="color:var(--amber)">● Starting</span>';
+
+        // Uptime
+        const s = Math.floor((Date.now() - boot) / 1000), h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60);
+        $('s-uptime').textContent = `${h}:${String(m).padStart(2, '0')}`;
+
+        log('ok', `Metrics synced · <span class="hl">${servers}</span> servers · <span class="hl">${playing}</span> active`);
+      } catch (e) { log('err', 'API unreachable: ' + e.message) }
+    }
+    sync(); setInterval(sync, 15000);
+
+    /* ═══ PRODUCTION LOG ══════════════════════════════════════════ */
+    const ls = $('log-stream');
+    function log(k, m) {
+      const d = new Date(), p = n => String(n).padStart(2, '0');
+      const t = `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+      const map = { info: 'INFO', ok: ' OK ', warn: 'WARN', err: ' ERR' };
+      const el = document.createElement('div'); el.className = 'log-row';
+      el.innerHTML = `<span class="log-t">${t}</span><span class="log-k k-${k}">[${map[k] || 'LOG'}]</span><span class="log-m">${m}</span>`;
+      ls.appendChild(el); ls.scrollTop = ls.scrollHeight;
+      while (ls.children.length > 120) ls.removeChild(ls.firstChild);
+    }
+    const boots = [
+      [200, 'info', 'Dashboard <span class="hl">v3.0.0</span> initializing...'],
+      [500, 'info', 'Loading industrial design system...'],
+      [800, 'ok', 'Particle engine <span class="hl">spawned</span> · 60 nodes'],
+      [1100, 'ok', 'Glassmorphism pipeline <span class="hl">active</span>'],
+      [1400, 'ok', 'Claymorphism renderer <span class="hl">ready</span>'],
+      [1700, 'info', 'Initializing waveform analyzer...'],
+      [2000, 'ok', 'Audio visualizer <span class="hl">online</span>'],
+      [2300, 'info', 'Connecting to Lavalink v4...'],
+      [2600, 'ok', 'Audio node connected · <span class="hl">latency nominal</span>'],
+      [2900, 'info', 'Syncing server metrics...'],
+      [3300, 'ok', 'All systems <span class="hl">operational</span> ✓'],
+    ];
+    boots.forEach(([ms, k, m]) => setTimeout(() => log(k, m), ms));
+
+    /* ═══ NAV & ACTIONS ═══════════════════════════════════════════ */
+    document.querySelectorAll('.sb-nav a[href^="#"]').forEach(a => {
+      a.addEventListener('click', e => {
+        e.preventDefault();
+        const t = document.querySelector(a.getAttribute('href'));
+        if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        document.querySelectorAll('.sb-nav a').forEach(l => l.classList.remove('active'));
+        a.classList.add('active');
+      });
+    });
+    function act(cmd) { log('info', `Dispatched: <span class="hl">/${cmd}</span>`) }
+  </script>
+</body>
+
+</html>

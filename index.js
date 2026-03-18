@@ -4,6 +4,7 @@ const path = require('path');
 const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const spotify = require('./spotify-client');
 const MusicPlayer = require('./music-player');
+const { pool, initDB } = require('./db');
 const logger = require('./utils/logger');
 const { Client: Genius } = require('genius-lyrics');
 
@@ -39,15 +40,10 @@ const play = require('play-dl');
 client.once('ready', async () => {
   logger.info(`✅ Online as ${client.user.tag}`);
   logger.info(`📊 Connected to ${client.guilds.cache.size} servers`);
-  logger.info('🎵 Audio engine: Spotify search + SoundCloud streaming (no Lavalink)');
+  logger.info('🎵 Audio engine: Spotify search + High-Res YouTube streaming (no Lavalink)');
 
-  try {
-    const clientID = await play.getFreeClientID();
-    await play.setToken({ soundcloud: { client_id: clientID } });
-    logger.info('☁️  SoundCloud API client ID configured');
-  } catch (err) {
-    logger.error('❌ Failed to set SoundCloud client ID:', err.message);
-  }
+  // Initialize SQLite Database
+  await initDB();
 });
 
 // ─── Auto-Leave Handler ───────────────────────────────────────────────────────
@@ -429,11 +425,6 @@ async function cmdFavorite(interaction) {
   const action = interaction.options.getString('action');
   const userId = interaction.user.id;
 
-  // Load favorites DB
-  let db = {};
-  try { db = JSON.parse(fs.readFileSync(FAVORITES_FILE, 'utf-8')); } catch { db = {}; }
-  if (!db[userId]) db[userId] = [];
-
   // ─── ADD current song ───
   if (action === 'add') {
     const player = MusicPlayer.get(interaction.guild.id);
@@ -441,81 +432,116 @@ async function cmdFavorite(interaction) {
       return interaction.editReply('❌ Nothing is playing. Play a song first!');
     }
     const t = player.current;
-    // Prevent duplicates
-    if (db[userId].some(f => f.spotifyId === t.spotifyId)) {
-      return interaction.editReply(`⚠️ **${t.title}** is already in your favorites!`);
-    }
-    db[userId].push({
-      title: t.title,
-      artist: t.artist,
-      uri: t.uri,
-      spotifyId: t.spotifyId,
-      thumbnail: t.thumbnail,
-      duration: t.duration,
-      searchQuery: t.searchQuery,
-      addedAt: Date.now(),
-    });
-    fs.writeFileSync(FAVORITES_FILE, JSON.stringify(db, null, 2));
 
-    const embed = new EmbedBuilder()
-      .setColor(0xE91E63)
-      .setTitle('❤️ Added to Favorites')
-      .setDescription(`**${t.title}** — ${t.artist}`)
-      .setThumbnail(t.thumbnail);
-    return interaction.editReply({ embeds: [embed] });
+    try {
+      // Prevent duplicates
+      const [rows] = await pool.execute(
+        'SELECT id FROM favorites WHERE user_id = ? AND spotifyId = ?',
+        [userId, t.spotifyId]
+      );
+      if (rows.length > 0) {
+        return interaction.editReply(`⚠️ **${t.title}** is already in your favorites!`);
+      }
+
+      await pool.execute(
+        'INSERT INTO favorites (user_id, title, artist, uri, thumbnail, searchQuery, spotifyId, duration) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        [userId, t.title, t.artist, t.uri, t.thumbnail, t.searchQuery, t.spotifyId, t.duration]
+      );
+
+      const embed = new EmbedBuilder()
+        .setColor(0xE91E63)
+        .setTitle('❤️ Added to Favorites')
+        .setDescription(`**${t.title}** — ${t.artist}`)
+        .setThumbnail(t.thumbnail);
+      return interaction.editReply({ embeds: [embed] });
+    } catch (err) {
+      logger.error('[DB Error] Add favorite:', err.message);
+      return interaction.editReply('❌ Database error. Could not save favorite.');
+    }
   }
 
   // ─── LIST favorites ───
   if (action === 'list') {
-    if (!db[userId].length) {
-      return interaction.editReply('📭 You have no favorites yet! Use `/favorite add` while a song is playing.');
-    }
-    const list = db[userId]
-      .map((f, i) => `${i + 1}. **${f.title}** — ${f.artist}`)
-      .slice(0, 20)
-      .join('\n');
+    try {
+      const [rows] = await pool.execute(
+        'SELECT title, artist FROM favorites WHERE user_id = ? ORDER BY id DESC LIMIT 20',
+        [userId]
+      );
 
-    const embed = new EmbedBuilder()
-      .setColor(0xE91E63)
-      .setTitle(`❤️ ${interaction.user.username}'s Favorites`)
-      .setDescription(list)
-      .setFooter({ text: `${db[userId].length} songs | Use /favorite play to queue them all` });
-    return interaction.editReply({ embeds: [embed] });
+      if (!rows.length) {
+        return interaction.editReply('📭 You have no favorites yet! Use `/favorite add` while a song is playing.');
+      }
+      const list = rows
+        .map((f, i) => `${i + 1}. **${f.title}** — ${f.artist}`)
+        .join('\n');
+
+      const embed = new EmbedBuilder()
+        .setColor(0xE91E63)
+        .setTitle(`❤️ ${interaction.user.username}'s Favorites`)
+        .setDescription(list)
+        .setFooter({ text: 'Use /favorite play to queue them all' });
+      return interaction.editReply({ embeds: [embed] });
+    } catch (err) {
+      logger.error('[DB Error] List favorites:', err.message);
+      return interaction.editReply('❌ Database error. Could not fetch favorites.');
+    }
   }
 
   // ─── PLAY all favorites ───
   if (action === 'play') {
-    if (!db[userId].length) {
-      return interaction.editReply('📭 No favorites to play!');
+    try {
+      const [rows] = await pool.execute(
+        'SELECT title, artist, uri, spotifyId, thumbnail, duration, searchQuery FROM favorites WHERE user_id = ?',
+        [userId]
+      );
+
+      if (!rows.length) {
+        return interaction.editReply('📭 No favorites to play!');
+      }
+      const vc = interaction.member?.voice?.channel;
+      if (!vc) return interaction.editReply('❌ Join a voice channel first!');
+
+      const player = MusicPlayer.getOrCreate(interaction.guild, vc, interaction.channel.id, client);
+      wirePlayerEvents(player);
+
+      for (const fav of rows) {
+        fav.requester = userId;
+        player.addTrack({ ...fav });
+      }
+      if (!player.playing && !player.paused) player.playNext();
+
+      const embed = new EmbedBuilder()
+        .setColor(0xE91E63)
+        .setTitle('❤️ Playing Favorites')
+        .setDescription(`Queued **${rows.length}** of your favorite songs!`);
+      return interaction.editReply({ embeds: [embed] });
+    } catch (err) {
+      logger.error('[DB Error] Play favorites:', err.message);
+      return interaction.editReply('❌ Database error. Could not queue favorites.');
     }
-    const vc = interaction.member?.voice?.channel;
-    if (!vc) return interaction.editReply('❌ Join a voice channel first!');
-
-    const player = MusicPlayer.getOrCreate(interaction.guild, vc, interaction.channel.id, client);
-    wirePlayerEvents(player);
-
-    for (const fav of db[userId]) {
-      fav.requester = userId;
-      player.addTrack({ ...fav });
-    }
-    if (!player.playing && !player.paused) player.playNext();
-
-    const embed = new EmbedBuilder()
-      .setColor(0xE91E63)
-      .setTitle('❤️ Playing Favorites')
-      .setDescription(`Queued **${db[userId].length}** of your favorite songs!`);
-    return interaction.editReply({ embeds: [embed] });
   }
 
   // ─── REMOVE by number ───
   if (action === 'remove') {
     const num = interaction.options.getInteger('number');
-    if (!num || num < 1 || num > db[userId].length) {
-      return interaction.editReply(`❌ Invalid number. You have ${db[userId].length} favorites.`);
+    if (!num || num < 1) return interaction.editReply('❌ Provide a valid song number.');
+
+    try {
+      const [rows] = await pool.execute(
+        'SELECT id, title FROM favorites WHERE user_id = ? ORDER BY id DESC',
+        [userId]
+      );
+      if (num > rows.length) return interaction.editReply(`❌ You only have ${rows.length} favorites.`);
+
+      const targetId = rows[num - 1].id;
+      const targetTitle = rows[num - 1].title;
+
+      await pool.execute('DELETE FROM favorites WHERE id = ?', [targetId]);
+      return interaction.editReply(`🗑️ Removed **${targetTitle}** from favorites.`);
+    } catch (err) {
+      logger.error('[DB Error] Remove favorite:', err.message);
+      return interaction.editReply('❌ Database error. Could not remove favorite.');
     }
-    const removed = db[userId].splice(num - 1, 1)[0];
-    fs.writeFileSync(FAVORITES_FILE, JSON.stringify(db, null, 2));
-    return interaction.editReply(`🗑️ Removed **${removed.title}** from favorites.`);
   }
 }
 

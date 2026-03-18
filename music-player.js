@@ -97,25 +97,31 @@ class GuildPlayer extends EventEmitter {
     this.current = track;
 
     try {
-      // Search SoundCloud for a matching track
-      const searchResults = await play.search(track.searchQuery, {
-        source: { soundcloud: 'tracks' },
+      // Search for the highest quality audio match
+      const searchResults = await play.search(`${track.title} ${track.artist} official audio`, {
         limit: 1,
       });
 
       if (!searchResults || searchResults.length === 0) {
-        console.warn(`[MusicPlayer] No SoundCloud result for: ${track.searchQuery}`);
-        this.emit('trackError', track, new Error('No audio source found on SoundCloud'));
+        console.warn(`[MusicPlayer] No audio stream found for: ${track.title}`);
+        this.emit('trackError', track, new Error('No audio source found'));
         // Try next track
         return this.playNext();
       }
 
-      const scTrack = searchResults[0];
-      const stream = await play.stream(scTrack.url);
+      const ytTrack = searchResults[0];
 
+      // Request highest quality stream from the platform
+      const stream = await play.stream(ytTrack.url, {
+        discordPlayerCompatibility: true,
+        quality: 2 // 0=lowest, 1=medium, 2=highest
+      });
+
+      // Optimize resource for highest bitrate avoiding buffering drops
       const resource = createAudioResource(stream.stream, {
         inputType: stream.type,
         inlineVolume: true,
+        silencePaddingFrames: 5, // fill dropouts
       });
 
       resource.volume?.setVolume(this.volume / 100);

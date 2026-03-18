@@ -3,4 +3,11 @@ node_modules/
 cookies.json
 .vscode
 package-lock.json
-dashboard/
+
+# Local Python-installed Node.js
+.node/
+
+# Database and logs
+data/
+*.sqlite
+*.log
