@@ -22,8 +22,6 @@
     "libsodium-wrappers": "^0.8.2",
     "mysql2": "^3.20.0",
     "opusscript": "^0.0.8",
-    "play-dl": "^1.9.7",
-    "sqlite": "^5.1.1",
-    "sqlite3": "^6.0.1"
+    "play-dl": "^1.9.7"
   }
 }

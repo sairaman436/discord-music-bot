@@ -424,6 +424,7 @@ async function cmd247(interaction) {
 async function cmdFavorite(interaction) {
   const action = interaction.options.getString('action');
   const userId = interaction.user.id;
+  const { db } = require('./db');
 
   // ─── ADD current song ───
   if (action === 'add') {
@@ -434,19 +435,19 @@ async function cmdFavorite(interaction) {
     const t = player.current;
 
     try {
-      // Prevent duplicates
-      const [rows] = await pool.execute(
-        'SELECT id FROM favorites WHERE user_id = ? AND spotifyId = ?',
-        [userId, t.spotifyId]
-      );
-      if (rows.length > 0) {
+      const added = db.addFavorite(userId, {
+        title: t.title,
+        artist: t.artist,
+        uri: t.uri,
+        thumbnail: t.thumbnail,
+        searchQuery: t.searchQuery,
+        spotifyId: t.spotifyId,
+        duration: t.duration
+      });
+
+      if (!added) {
         return interaction.editReply(`⚠️ **${t.title}** is already in your favorites!`);
       }
-
-      await pool.execute(
-        'INSERT INTO favorites (user_id, title, artist, uri, thumbnail, searchQuery, spotifyId, duration) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-        [userId, t.title, t.artist, t.uri, t.thumbnail, t.searchQuery, t.spotifyId, t.duration]
-      );
 
       const embed = new EmbedBuilder()
         .setColor(0xE91E63)
@@ -463,15 +464,12 @@ async function cmdFavorite(interaction) {
   // ─── LIST favorites ───
   if (action === 'list') {
     try {
-      const [rows] = await pool.execute(
-        'SELECT title, artist FROM favorites WHERE user_id = ? ORDER BY id DESC LIMIT 20',
-        [userId]
-      );
+      const favs = db.getFavorites(userId).slice(-20).reverse();
 
-      if (!rows.length) {
+      if (!favs.length) {
         return interaction.editReply('📭 You have no favorites yet! Use `/favorite add` while a song is playing.');
       }
-      const list = rows
+      const list = favs
         .map((f, i) => `${i + 1}. **${f.title}** — ${f.artist}`)
         .join('\n');
 
@@ -490,12 +488,9 @@ async function cmdFavorite(interaction) {
   // ─── PLAY all favorites ───
   if (action === 'play') {
     try {
-      const [rows] = await pool.execute(
-        'SELECT title, artist, uri, spotifyId, thumbnail, duration, searchQuery FROM favorites WHERE user_id = ?',
-        [userId]
-      );
+      const favs = db.getFavorites(userId);
 
-      if (!rows.length) {
+      if (!favs.length) {
         return interaction.editReply('📭 No favorites to play!');
       }
       const vc = interaction.member?.voice?.channel;
@@ -504,7 +499,7 @@ async function cmdFavorite(interaction) {
       const player = MusicPlayer.getOrCreate(interaction.guild, vc, interaction.channel.id, client);
       wirePlayerEvents(player);
 
-      for (const fav of rows) {
+      for (const fav of favs) {
         fav.requester = userId;
         player.addTrack({ ...fav });
       }
@@ -513,7 +508,7 @@ async function cmdFavorite(interaction) {
       const embed = new EmbedBuilder()
         .setColor(0xE91E63)
         .setTitle('❤️ Playing Favorites')
-        .setDescription(`Queued **${rows.length}** of your favorite songs!`);
+        .setDescription(`Queued **${favs.length}** of your favorite songs!`);
       return interaction.editReply({ embeds: [embed] });
     } catch (err) {
       logger.error('[DB Error] Play favorites:', err.message);
@@ -527,16 +522,15 @@ async function cmdFavorite(interaction) {
     if (!num || num < 1) return interaction.editReply('❌ Provide a valid song number.');
 
     try {
-      const [rows] = await pool.execute(
-        'SELECT id, title FROM favorites WHERE user_id = ? ORDER BY id DESC',
-        [userId]
-      );
-      if (num > rows.length) return interaction.editReply(`❌ You only have ${rows.length} favorites.`);
+      // The displayed list is reversed (newest first). Match that sorting.
+      const favs = db.getFavorites(userId).slice(-20).reverse();
 
-      const targetId = rows[num - 1].id;
-      const targetTitle = rows[num - 1].title;
+      if (num > favs.length) return interaction.editReply(`❌ You only have ${favs.length} favorites shown.`);
 
-      await pool.execute('DELETE FROM favorites WHERE id = ?', [targetId]);
+      const targetId = favs[num - 1].id;
+      const targetTitle = favs[num - 1].title;
+
+      db.removeFavorite(userId, targetId);
       return interaction.editReply(`🗑️ Removed **${targetTitle}** from favorites.`);
     } catch (err) {
       logger.error('[DB Error] Remove favorite:', err.message);
