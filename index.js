@@ -42,6 +42,15 @@ client.once('ready', async () => {
   logger.info(`📊 Connected to ${client.guilds.cache.size} servers`);
   logger.info('🎵 Audio engine: Spotify search + High-Res YouTube streaming (no Lavalink)');
 
+  // Connect SoundCloud so the YouTube fallback system doesn't crash!
+  try {
+    const clientID = await play.getFreeClientID();
+    await play.setToken({ soundcloud: { client_id: clientID } });
+    logger.info('☁️  SoundCloud API client ID configured (Ready for Fallback)');
+  } catch (err) {
+    logger.error('❌ Failed to set SoundCloud client ID:', err.message);
+  }
+
   // Initialize SQLite Database
   await initDB();
 });
@@ -93,6 +102,10 @@ client.on('voiceStateUpdate', (oldState, newState) => {
 // ─── Slash Command Handler ────────────────────────────────────────────────────
 
 client.on('interactionCreate', async (interaction) => {
+  if (interaction.isButton() && interaction.customId.startsWith('btn_')) {
+    return handleButton(interaction);
+  }
+
   if (!interaction.isChatInputCommand()) return;
 
   const handlers = {
@@ -133,6 +146,62 @@ client.on('interactionCreate', async (interaction) => {
     console.error(`[/${interaction.commandName}] Command Error:`, err);
   }
 });
+
+// ─── Button Interactions ──────────────────────────────────────────────────────
+
+async function handleButton(interaction) {
+  const player = MusicPlayer.get(interaction.guild.id);
+  if (!player && interaction.customId !== 'btn_favorite') {
+    return interaction.reply({ content: '❌ Nothing is playing right now.', ephemeral: true });
+  }
+
+  const act = interaction.customId;
+
+  if (act === 'btn_playpause') {
+    if (player.paused) {
+      player.resume();
+      return interaction.reply({ content: '▶️ Resumed.', ephemeral: true });
+    } else {
+      player.pause();
+      return interaction.reply({ content: '⏸️ Paused.', ephemeral: true });
+    }
+  }
+
+  if (act === 'btn_skip') {
+    player.skip();
+    return interaction.reply({ content: '⏭️ Skipped.', ephemeral: true });
+  }
+
+  if (act === 'btn_stop') {
+    player.stop();
+    player.destroy();
+    return interaction.reply({ content: '⏹️ Stopped.', ephemeral: true });
+  }
+
+  if (act === 'btn_loop') {
+    player.loopTrack = !player.loopTrack;
+    player.loopQueue = false;
+    return interaction.reply({ content: `🔁 Track loop is now **${player.loopTrack ? 'ON' : 'OFF'}**.`, ephemeral: true });
+  }
+
+  if (act === 'btn_favorite') {
+    const userId = interaction.user.id;
+    const { db } = require('./db');
+    if (!player || !player.current) {
+      return interaction.reply({ content: '❌ Nothing is playing.', ephemeral: true });
+    }
+    const t = player.current;
+    try {
+      const added = db.addFavorite(userId, {
+        title: t.title, artist: t.artist, uri: t.uri, thumbnail: t.thumbnail, searchQuery: t.searchQuery, spotifyId: t.spotifyId, duration: t.duration
+      });
+      if (!added) return interaction.reply({ content: `⚠️ You already favorited **${t.title}**!`, ephemeral: true });
+      return interaction.reply({ content: `❤️ Added **${t.title}** to your favorites!`, ephemeral: true });
+    } catch (err) {
+      return interaction.reply({ content: '❌ Database error saving favorite.', ephemeral: true });
+    }
+  }
+}
 
 // ─── Commands ─────────────────────────────────────────────────────────────────
 
@@ -745,7 +814,16 @@ function wirePlayerEvents(player) {
           `**${t.artist}**\n\`${formatDuration(t.duration)}\` | Requested by <@${t.requester}>`
         )
         .setThumbnail(t.thumbnail);
-      ch.send({ embeds: [embed] }).catch(() => { });
+
+      const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId('btn_playpause').setLabel('⏯️').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId('btn_skip').setLabel('⏭️').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId('btn_stop').setLabel('⏹️').setStyle(ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId('btn_loop').setLabel('🔁').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId('btn_favorite').setLabel('❤️').setStyle(ButtonStyle.Success)
+      );
+
+      ch.send({ embeds: [embed], components: [row] }).catch(() => { });
     }
   });
 
@@ -758,6 +836,10 @@ function wirePlayerEvents(player) {
 
   player.on('trackError', (t, err) => {
     console.error(`[TrackError] ${t?.title}: ${err.message}`);
+    const ch = client.channels.cache.get(player.textChannelId);
+    if (ch) {
+      ch.send(`❌ **Playback Error:** Could not stream **${t?.title}**. (${err.message})`).catch(() => { });
+    }
   });
 }
 

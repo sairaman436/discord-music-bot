@@ -97,25 +97,65 @@ class GuildPlayer extends EventEmitter {
     this.current = track;
 
     try {
-      // Search for the highest quality audio match
-      const searchResults = await play.search(`${track.title} ${track.artist} official audio`, {
-        limit: 1,
-      });
+      let stream;
+      let streamError = null;
 
-      if (!searchResults || searchResults.length === 0) {
-        console.warn(`[MusicPlayer] No audio stream found for: ${track.title}`);
-        this.emit('trackError', track, new Error('No audio source found'));
-        // Try next track
-        return this.playNext();
+      // 1️⃣ ATTEMPT YOUTUBE FOR HIGH QUALITY
+      try {
+        const ytResults = await play.search(`${track.title} ${track.artist}`, { limit: 5 });
+        if (ytResults && ytResults.length > 0) {
+          const avoidWords = ['remix', 'cover', 'slowed', 'reverb', 'sped up', 'nightcore', 'mashup', '8d', 'instrumental', 'karaoke', 'pitch'];
+          const titleLower = track.title.toLowerCase();
+          const wordsToFilter = avoidWords.filter(w => !titleLower.includes(w));
+
+          let bestMatch = ytResults[0];
+          for (const res of ytResults) {
+            const resName = (res.title || '').toLowerCase();
+            const hasBadWord = wordsToFilter.some(w => resName.includes(w));
+            if (!hasBadWord) {
+              bestMatch = res;
+              break;
+            }
+          }
+
+          stream = await play.stream(bestMatch.url, { discordPlayerCompatibility: true });
+        }
+      } catch (err) {
+        console.warn(`[MusicPlayer] YouTube stream failed for ${track.title}. Falling back to SoundCloud...`);
+        streamError = err.message;
       }
 
-      const ytTrack = searchResults[0];
+      // 2️⃣ FALLBACK TO SOUNDCLOUD IF YOUTUBE IS BLOCKED (e.g. rate limits)
+      if (!stream) {
+        const scResults = await play.search(`${track.title} ${track.artist}`, {
+          source: { soundcloud: 'tracks' }, limit: 5
+        });
 
-      // Request highest quality stream from the platform
-      const stream = await play.stream(ytTrack.url, {
-        discordPlayerCompatibility: true,
-        quality: 2 // 0=lowest, 1=medium, 2=highest
-      });
+        if (scResults && scResults.length > 0) {
+          // Filter to avoid bad versions unless specifically requested
+          const avoidWords = ['remix', 'cover', 'slowed', 'reverb', 'sped up', 'nightcore', 'mashup', '8d', 'instrumental', 'karaoke'];
+          const titleLower = track.title.toLowerCase();
+
+          // Only filter out words that aren't in the original requested title
+          const wordsToFilter = avoidWords.filter(w => !titleLower.includes(w));
+
+          let bestMatch = scResults[0]; // fallback to first result
+
+          for (const res of scResults) {
+            const resName = (res.name || res.title || '').toLowerCase();
+            const hasBadWord = wordsToFilter.some(w => resName.includes(w));
+
+            if (!hasBadWord) {
+              bestMatch = res;
+              break;
+            }
+          }
+
+          stream = await play.stream(bestMatch.url);
+        } else {
+          throw new Error(streamError || 'No audio source found on any platform.');
+        }
+      }
 
       // Optimize resource for highest bitrate avoiding buffering drops
       const resource = createAudioResource(stream.stream, {
@@ -132,7 +172,8 @@ class GuildPlayer extends EventEmitter {
     } catch (err) {
       console.error(`[MusicPlayer] Stream error for "${track.title}":`, err.message);
       this.emit('trackError', track, err);
-      return this.playNext();
+      // Wait a moment before skipping to avoid spamming the API
+      setTimeout(() => this.playNext(), 2000);
     }
   }
 
